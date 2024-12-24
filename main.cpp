@@ -2,8 +2,19 @@
 #include <cstring> // For size_t
 
 #include <iostream>
+#include <sstream>
 #include <cctype>
 #include <cstring>
+
+#include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <assert.h>
+
+
+
+
+
 
 // Enum for format flags
 enum class FormatFlag {
@@ -15,6 +26,66 @@ enum class FormatFlag {
     LEFT_ALIGN,      // '-' flag
     CUSTOM_UNKNOWN   // Unknown or unsupported flag
 };
+
+
+
+// Enum for conversion specifiers
+enum class ConversionSpecifier {
+    INTEGER_SIGNED_DECIMAL,       // %d or %i
+    INTEGER_UNSIGNED_DECIMAL,     // %u
+    INTEGER_OCTAL,                // %o
+    INTEGER_HEXADECIMAL_LOWER,    // %x
+    INTEGER_HEXADECIMAL_UPPER,    // %X
+    FLOAT_DECIMAL,                // %f or %F
+    FLOAT_EXPONENTIAL_LOWER,      // %e
+    FLOAT_EXPONENTIAL_UPPER,      // %E
+    FLOAT_SHORTEST_LOWER,         // %g
+    FLOAT_SHORTEST_UPPER,         // %G
+    CHARACTER,                    // %c
+    STRING,                       // %s
+    POINTER,                      // %p
+    PERCENT_SIGN,                 // %%
+    NONE,                         // None given 
+    CUSTOM_UNKNOWN                // For undefined or unsupported specifiers
+};
+
+// Enum for length modifiers
+enum class SizeModifier {
+    NONE,         // No length modifier
+    SHORT,        // 'h'
+    CHAR,         // 'hh'
+    LONG,         // 'l'
+    LONG_LONG,    // 'll'
+    LONG_DOUBLE,  // 'L'
+    SIZE_T,       // 'z'
+    PTRDIFF_T,    // 't'
+    MAX_T,        // 'j'
+    CUSTOM_UNKNOWN // Unknown or unsupported length modifier
+};
+
+struct FormatSpecifier {
+    // Boolean flags
+    bool leftAlign           = false; // '-' flag
+    bool showSign            = false; // '+' flag
+    bool spaceBeforePositive = false; // ' ' flag
+    bool alternateForm       = false; // '#' flag
+    bool zeroPadding         = false; // '0' flag
+
+    // Width and precision
+    int width     = -1;        // Width (-1 means not specified)
+    int precision = -1;        // Precision (-1 means not specified)
+
+    // Size specifier
+    SizeModifier size = SizeModifier::NONE;
+
+    // Conversion specifier
+    ConversionSpecifier conversion = ConversionSpecifier::NONE;
+};
+
+
+
+
+
 
 // Convert format flag enum to string
 std::string to_string(FormatFlag flag) {
@@ -30,84 +101,63 @@ std::string to_string(FormatFlag flag) {
     }
 }
 
-
-
-
-// Enum for format specifiers
-enum class FormatSpecifier {
-    INTEGER_SIGNED_DECIMAL,       // %d or %i
-    INTEGER_UNSIGNED_DECIMAL,     // %u
-    INTEGER_OCTAL,                // %o
-    INTEGER_HEXADECIMAL_LOWER,    // %x
-    INTEGER_HEXADECIMAL_UPPER,    // %X
-    FLOAT_DECIMAL,                // %f or %F
-    FLOAT_EXPONENTIAL_LOWER,      // %e
-    FLOAT_EXPONENTIAL_UPPER,      // %E
-    FLOAT_SHORTEST_LOWER,         // %g
-    FLOAT_SHORTEST_UPPER,         // %G
-    CHARACTER,                    // %c
-    STRING,                       // %s
-    POINTER,                      // %p
-    PERCENT_SIGN,                 // %%
-    CUSTOM_UNKNOWN                // For undefined or unsupported specifiers
-};
-
-// Convert format specifier enum to string
-std::string to_string(FormatSpecifier specifier) {
+// Convert conversion specifier enum to string
+std::string to_string(ConversionSpecifier specifier) {
     switch (specifier) {
-        case FormatSpecifier::INTEGER_SIGNED_DECIMAL:   return "INTEGER_SIGNED_DECIMAL";
-        case FormatSpecifier::INTEGER_UNSIGNED_DECIMAL: return "INTEGER_UNSIGNED_DECIMAL";
-        case FormatSpecifier::INTEGER_OCTAL:            return "INTEGER_OCTAL";
-        case FormatSpecifier::INTEGER_HEXADECIMAL_LOWER:return "INTEGER_HEXADECIMAL_LOWER";
-        case FormatSpecifier::INTEGER_HEXADECIMAL_UPPER:return "INTEGER_HEXADECIMAL_UPPER";
-        case FormatSpecifier::FLOAT_DECIMAL:            return "FLOAT_DECIMAL";
-        case FormatSpecifier::FLOAT_EXPONENTIAL_LOWER:  return "FLOAT_EXPONENTIAL_LOWER";
-        case FormatSpecifier::FLOAT_EXPONENTIAL_UPPER:  return "FLOAT_EXPONENTIAL_UPPER";
-        case FormatSpecifier::FLOAT_SHORTEST_LOWER:     return "FLOAT_SHORTEST_LOWER";
-        case FormatSpecifier::FLOAT_SHORTEST_UPPER:     return "FLOAT_SHORTEST_UPPER";
-        case FormatSpecifier::CHARACTER:                return "CHARACTER";
-        case FormatSpecifier::STRING:                   return "STRING";
-        case FormatSpecifier::POINTER:                  return "POINTER";
-        case FormatSpecifier::PERCENT_SIGN:             return "PERCENT_SIGN";
-        case FormatSpecifier::CUSTOM_UNKNOWN:           return "CUSTOM_UNKNOWN";
-        default:                                        return "UNKNOWN";
+        case ConversionSpecifier::INTEGER_SIGNED_DECIMAL:   return "INTEGER_SIGNED_DECIMAL";
+        case ConversionSpecifier::INTEGER_UNSIGNED_DECIMAL: return "INTEGER_UNSIGNED_DECIMAL";
+        case ConversionSpecifier::INTEGER_OCTAL:            return "INTEGER_OCTAL";
+        case ConversionSpecifier::INTEGER_HEXADECIMAL_LOWER:return "INTEGER_HEXADECIMAL_LOWER";
+        case ConversionSpecifier::INTEGER_HEXADECIMAL_UPPER:return "INTEGER_HEXADECIMAL_UPPER";
+        case ConversionSpecifier::FLOAT_DECIMAL:            return "FLOAT_DECIMAL";
+        case ConversionSpecifier::FLOAT_EXPONENTIAL_LOWER:  return "FLOAT_EXPONENTIAL_LOWER";
+        case ConversionSpecifier::FLOAT_EXPONENTIAL_UPPER:  return "FLOAT_EXPONENTIAL_UPPER";
+        case ConversionSpecifier::FLOAT_SHORTEST_LOWER:     return "FLOAT_SHORTEST_LOWER";
+        case ConversionSpecifier::FLOAT_SHORTEST_UPPER:     return "FLOAT_SHORTEST_UPPER";
+        case ConversionSpecifier::CHARACTER:                return "CHARACTER";
+        case ConversionSpecifier::STRING:                   return "STRING";
+        case ConversionSpecifier::POINTER:                  return "POINTER";
+        case ConversionSpecifier::PERCENT_SIGN:             return "PERCENT_SIGN";
+        case ConversionSpecifier::NONE:                     return "NONE";
+        case ConversionSpecifier::CUSTOM_UNKNOWN:           return "CUSTOM_UNKNOWN";
+        default:                                            return "UNKNOWN";
     }
 }
-
-
-
-
-
-// Enum for length modifiers
-enum class LengthModifier {
-    NONE,         // No length modifier
-    SHORT,        // 'h'
-    CHAR,         // 'hh'
-    LONG,         // 'l'
-    LONG_LONG,    // 'll'
-    LONG_DOUBLE,  // 'L'
-    SIZE_T,       // 'z'
-    PTRDIFF_T,    // 't'
-    MAX_T,        // 'j'
-    CUSTOM_UNKNOWN // Unknown or unsupported length modifier
-};
 
 // Convert length modifier enum to string
-std::string to_string(LengthModifier modifier) {
+std::string to_string(SizeModifier modifier) {
     switch (modifier) {
-        case LengthModifier::NONE:           return "NONE";
-        case LengthModifier::SHORT:          return "SHORT ('h')";
-        case LengthModifier::CHAR:           return "CHAR ('hh')";
-        case LengthModifier::LONG:           return "LONG ('l')";
-        case LengthModifier::LONG_LONG:      return "LONG_LONG ('ll')";
-        case LengthModifier::LONG_DOUBLE:    return "LONG_DOUBLE ('L')";
-        case LengthModifier::SIZE_T:         return "SIZE_T ('z')";
-        case LengthModifier::PTRDIFF_T:      return "PTRDIFF_T ('t')";
-        case LengthModifier::MAX_T:          return "MAX_T ('j')";
-        case LengthModifier::CUSTOM_UNKNOWN: return "CUSTOM_UNKNOWN";
-        default:                             return "UNKNOWN";
+        case SizeModifier::NONE:           return "NONE";
+        case SizeModifier::SHORT:          return "SHORT ('h')";
+        case SizeModifier::CHAR:           return "CHAR ('hh')";
+        case SizeModifier::LONG:           return "LONG ('l')";
+        case SizeModifier::LONG_LONG:      return "LONG_LONG ('ll')";
+        case SizeModifier::LONG_DOUBLE:    return "LONG_DOUBLE ('L')";
+        case SizeModifier::SIZE_T:         return "SIZE_T ('z')";
+        case SizeModifier::PTRDIFF_T:      return "PTRDIFF_T ('t')";
+        case SizeModifier::MAX_T:          return "MAX_T ('j')";
+        case SizeModifier::CUSTOM_UNKNOWN: return "CUSTOM_UNKNOWN";
+        default:                           return "UNKNOWN";
     }
 }
+
+// Utility function for debugging: Print a FormatSpecifier
+std::to_string to_string(const FormatSpecifier& fs) {
+    sstream ss;
+    ss << "Flags:\n";
+    ss << "\t  Left Align (-): " << (fs.leftAlign ? "true" : "false") << "\n";
+    ss << "\t  Show Sign (+): " << (fs.showSign ? "true" : "false") << "\n";
+    ss << "\t  Space Before Positive ( ): " << (fs.spaceBeforePositive ? "true" : "false") << "\n";
+    ss << "\t  Alternate Form (#): " << (fs.alternateForm ? "true" : "false") << "\n";
+    ss << "\t  Zero Padding (0): " << (fs.zeroPadding ? "true" : "false") << "\n";
+    ss << "\t  Width: " << (fs.width >= 0 ? std::to_string(fs.width) : "not specified") << "\n";
+    ss << "\t  Precision: " << (fs.precision >= 0 ? std::to_string(fs.precision) : "not specified") << "\n";
+    ss << "\t  Size Specifier: " << to_string( fs.size ) << "\n";
+    ss << "\t  Conversion Specifier: " << to_string( fs.conversion ) << "\n";
+    return ss.to_string();
+}
+
+
 
 
 
@@ -213,17 +263,57 @@ int my_snprintf(char* buffer, size_t n, const char* format, ...) {
 
 
 
+int my_vsnprintf(char *buffer, size_t n, const char *format, va_list args) {
+    size_t i = 0;   // Index for format string
+    size_t j = 0;   // Index for output buffer
+    char c;
+
+    // Loop over the format string
+    while ((c = format[i++]) != '\0') {
+        // Assert no percentage signs
+        assert(c != '%' && "Format specifiers are not supported in this implementation!");
+
+        // Write the character to the buffer if there is space
+        if (j + 1 < n) { // Reserve space for the null terminator
+            buffer[j++] = c;
+        }
+    }
+
+    // Null-terminate the buffer if space is available
+    if (n > 0) {
+        buffer[j < n ? j : n - 1] = '\0';
+    }
+
+    // Return the total number of characters that would have been written
+    return j;
+}
+
+
+
+
 // Main function to test the functionality
 int main() {
     
     // Testing enums
-    std::cout << "FormatSpecifier: " << to_string(FormatSpecifier::INTEGER_SIGNED_DECIMAL) << "\n";
+    std::cout << "ConversionSpecifier: " << to_string(ConversionSpecifier::INTEGER_SIGNED_DECIMAL) << "\n";
     std::cout << "FormatFlag: " << to_string(FormatFlag::PLUS) << "\n";
-    std::cout << "LengthModifier: " << to_string(LengthModifier::LONG_LONG) << "\n";
+    std::cout << "SizeModifier: " << to_string(SizeModifier::LONG_LONG) << "\n";
 
     // Testing parse_decimal_integer
     const char* testInput = "12345abc";
     std::cout << "Parsed integer: " << parse_decimal_integer(testInput) << "\n";
+
+    {
+        FormatSpecifier fs;
+        fs.leftAlign = true;
+        fs.zeroPadding = true;
+        fs.width = 10;
+        fs.precision = 2;
+        fs.size = SizeModifier::LONG;
+        fs.conversion = ConversionSpecifier::INTEGER_UNSIGNED_DECIMAL;
+
+        std::cout << "FormatSpecifier: " << to_string(fs) << "\n";
+    }
 
     // Testing integer_to_string
     {
@@ -249,6 +339,27 @@ int main() {
         my_snprintf(buffer, 5, "A%%B%%C%%");
         printf("Buffer (truncated): %s\n", buffer); // Expected: "A%B" // TODO: Fix behavior
     }
+    
+    {
+        char buffer[14];
+        int written;
+    
+        // Test case 1: Normal string without %
+        written = my_vsnprintf(buffer, sizeof(buffer), "Hello, World!", NULL);
+        std::cout << "TEST" << std::endl;
+        printf("Buffer: %s\n", buffer);
+        printf("Characters Written: %d\n", written);
+        
+        // Test case 2: Buffer too small
+        written = my_vsnprintf(buffer, 6, "Hello, World!", NULL);
+        printf("Buffer (truncated): %s\n", buffer);
+        printf("Characters Written: %d\n", written);
+    
+        // Test case 3: String with a percentage (should trigger assert)
+        // Uncomment to test assertion failure
+        // written = vsnprintf(buffer, sizeof(buffer), "Hello, %s!", NULL);
+    }
+    
 
     return 0;
 }
