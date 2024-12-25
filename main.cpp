@@ -142,8 +142,8 @@ std::string to_string(SizeModifier modifier) {
 }
 
 // Utility function for debugging: Print a FormatSpecifier
-std::to_string to_string(const FormatSpecifier& fs) {
-    sstream ss;
+std::string to_string(const FormatSpecifier& fs) {
+    std::stringstream ss;
     ss << "Flags:\n";
     ss << "\t  Left Align (-): " << (fs.leftAlign ? "true" : "false") << "\n";
     ss << "\t  Show Sign (+): " << (fs.showSign ? "true" : "false") << "\n";
@@ -154,7 +154,7 @@ std::to_string to_string(const FormatSpecifier& fs) {
     ss << "\t  Precision: " << (fs.precision >= 0 ? std::to_string(fs.precision) : "not specified") << "\n";
     ss << "\t  Size Specifier: " << to_string( fs.size ) << "\n";
     ss << "\t  Conversion Specifier: " << to_string( fs.conversion ) << "\n";
-    return ss.to_string();
+    return ss.str();
 }
 
 
@@ -294,17 +294,13 @@ int my_vsnprintf(char *buffer, size_t n, const char *format, va_list args) {
 // Main function to test the functionality
 int main() {
     
-    // Testing enums
-    std::cout << "ConversionSpecifier: " << to_string(ConversionSpecifier::INTEGER_SIGNED_DECIMAL) << "\n";
-    std::cout << "FormatFlag: " << to_string(FormatFlag::PLUS) << "\n";
-    std::cout << "SizeModifier: " << to_string(SizeModifier::LONG_LONG) << "\n";
-
-    // Testing parse_decimal_integer
-    const char* testInput = "12345abc";
-    std::cout << "Parsed integer: " << parse_decimal_integer(testInput) << "\n";
-
     {
-        FormatSpecifier fs;
+        // Testing enums
+        std::cout << "ConversionSpecifier: " << to_string(ConversionSpecifier::INTEGER_SIGNED_DECIMAL) << "\n";
+        std::cout << "FormatFlag: " << to_string(FormatFlag::PLUS) << "\n";
+        std::cout << "SizeModifier: " << to_string(SizeModifier::LONG_LONG) << "\n";
+
+            FormatSpecifier fs;
         fs.leftAlign = true;
         fs.zeroPadding = true;
         fs.width = 10;
@@ -315,8 +311,12 @@ int main() {
         std::cout << "FormatSpecifier: " << to_string(fs) << "\n";
     }
 
+    // Testing parse_decimal_integer
     // Testing integer_to_string
     {
+        const char* testInput = "12345abc";
+        std::cout << "Parsed integer: " << parse_decimal_integer(testInput) << "\n";
+
         char buffer[100];
         integer_to_string(12345, buffer, 10);
         std::cout << "12345 in base 10: " << buffer << "\n";
