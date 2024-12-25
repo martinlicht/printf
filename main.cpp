@@ -12,6 +12,11 @@
 #include <assert.h>
 
 
+#include <cstdarg>
+#include <cstdio>
+#include <cstddef>
+#include <algorithm>
+
 
 
 
@@ -50,7 +55,7 @@ enum class ConversionSpecifier {
 };
 
 // Enum for length modifiers
-enum class SizeModifier {
+enum class SizeSpecifier {
     NONE,         // No length modifier
     SHORT,        // 'h'
     CHAR,         // 'hh'
@@ -76,10 +81,31 @@ struct FormatSpecifier {
     int precision = -1;        // Precision (-1 means not specified)
 
     // Size specifier
-    SizeModifier size = SizeModifier::NONE;
+    SizeSpecifier size = SizeSpecifier::NONE;
 
     // Conversion specifier
     ConversionSpecifier conversion = ConversionSpecifier::NONE;
+    
+    FormatSpecifier(
+        bool leftAlign = false,
+        bool showSign = false,
+        bool spaceBeforePositive = false,
+        bool alternateForm = false,
+        bool zeroPadding = false,
+        int width = -1,                        // Default: not specified
+        int precision = -1,                    // Default: not specified
+        SizeSpecifier size = SizeSpecifier::NONE,
+        ConversionSpecifier conversion = ConversionSpecifier::NONE
+    ) 
+        : leftAlign(leftAlign),
+          showSign(showSign),
+          spaceBeforePositive(spaceBeforePositive),
+          alternateForm(alternateForm),
+          zeroPadding(zeroPadding),
+          width(width),
+          precision(precision),
+          size(size),
+          conversion(conversion) {}
 };
 
 
@@ -125,18 +151,18 @@ std::string to_string(ConversionSpecifier specifier) {
 }
 
 // Convert length modifier enum to string
-std::string to_string(SizeModifier modifier) {
+std::string to_string(SizeSpecifier modifier) {
     switch (modifier) {
-        case SizeModifier::NONE:           return "NONE";
-        case SizeModifier::SHORT:          return "SHORT ('h')";
-        case SizeModifier::CHAR:           return "CHAR ('hh')";
-        case SizeModifier::LONG:           return "LONG ('l')";
-        case SizeModifier::LONG_LONG:      return "LONG_LONG ('ll')";
-        case SizeModifier::LONG_DOUBLE:    return "LONG_DOUBLE ('L')";
-        case SizeModifier::SIZE_T:         return "SIZE_T ('z')";
-        case SizeModifier::PTRDIFF_T:      return "PTRDIFF_T ('t')";
-        case SizeModifier::MAX_T:          return "MAX_T ('j')";
-        case SizeModifier::CUSTOM_UNKNOWN: return "CUSTOM_UNKNOWN";
+        case SizeSpecifier::NONE:           return "NONE";
+        case SizeSpecifier::SHORT:          return "SHORT ('h')";
+        case SizeSpecifier::CHAR:           return "CHAR ('hh')";
+        case SizeSpecifier::LONG:           return "LONG ('l')";
+        case SizeSpecifier::LONG_LONG:      return "LONG_LONG ('ll')";
+        case SizeSpecifier::LONG_DOUBLE:    return "LONG_DOUBLE ('L')";
+        case SizeSpecifier::SIZE_T:         return "SIZE_T ('z')";
+        case SizeSpecifier::PTRDIFF_T:      return "PTRDIFF_T ('t')";
+        case SizeSpecifier::MAX_T:          return "MAX_T ('j')";
+        case SizeSpecifier::CUSTOM_UNKNOWN: return "CUSTOM_UNKNOWN";
         default:                           return "UNKNOWN";
     }
 }
@@ -163,33 +189,150 @@ std::string to_string(const FormatSpecifier& fs) {
 
 
 
+
+
+
+
+
+
+
 // Function to parse a non-negative integer from char*
-unsigned long parse_decimal_integer(const char* input) 
+const char* parse_unsigned_decimal_integer( const char* input, unsigned long* result ) 
 {
     
-    if (!input) return 0; // Return 0 for null input
+    assert( input ); // Return 0 for null input
+    assert( result );
     
-    unsigned long result = 0;
-
     while ( *input && std::isdigit(*input) ) 
     {
-        result = result * 10 + (*input - '0');
+        *result = *result * 10 + ( *input - '0' );
         ++input;
     }
 
-    return result;
+    return input;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Function to parse a format specifier
+FormatSpecifier readFormatSpecifier(const char** format, va_list args) {
+    FormatSpecifier fs;
+
+    const char* current = *format;
+
+    // 1. Parse flags
+    while (*current == '-' || *current == '+' || *current == ' ' || *current == '#' || *current == '0') {
+        switch (*current) {
+            case '-': fs.leftAlign = true; break;
+            case '+': fs.showSign = true; break;
+            case ' ': fs.spaceBeforePositive = true; break;
+            case '#': fs.alternateForm = true; break;
+            case '0': fs.zeroPadding = true; break;
+        }
+        ++current;
+    }
+
+    // 2. Parse width
+    if (std::isdigit(*current)) {
+        fs.width = std::strtol(current, const_cast<char**>(&current), 10);
+    } else if (*current == '*') {
+        fs.width = va_arg(args, int);
+        ++current;
+    }
+
+    // 3. Parse precision
+    if (*current == '.') {
+        ++current; // Skip '.'
+        if (std::isdigit(*current)) {
+            fs.precision = std::strtol(current, const_cast<char**>(&current), 10);
+        } else if (*current == '*') {
+            fs.precision = va_arg(args, int);
+            ++current;
+        } else {
+            fs.precision = 0; // Default precision if only '.' is present
+        }
+    }
+
+    // 4. Parse size specifier
+    if (*current == 'h') {
+        ++current;
+        if (*current == 'h') {
+            fs.size = SizeSpecifier::CHAR;
+            ++current;
+        } else {
+            fs.size = SizeSpecifier::SHORT;
+        }
+    } else if (*current == 'l') {
+        ++current;
+        if (*current == 'l') {
+            fs.size = SizeSpecifier::LONG_LONG;
+            ++current;
+        } else {
+            fs.size = SizeSpecifier::LONG;
+        }
+    } else if (*current == 'L') {
+        fs.size = SizeSpecifier::LONG_DOUBLE;
+        ++current;
+    } else if (*current == 'z') {
+        fs.size = SizeSpecifier::SIZE_T;
+        ++current;
+    } else if (*current == 't') {
+        fs.size = SizeSpecifier::PTRDIFF_T;
+        ++current;
+    } else if (*current == 'j') {
+        fs.size = SizeSpecifier::MAX_T;
+        ++current;
+    }
+
+    // 5. Parse conversion specifier
+    switch (*current) {
+        case 'd': case 'i': fs.conversion = ConversionSpecifier::INTEGER_SIGNED_DECIMAL;; break;
+        case 'o': fs.conversion = ConversionSpecifier::INTEGER_OCTAL; break;
+        case 'x': fs.conversion = ConversionSpecifier::INTEGER_HEXADECIMAL_LOWER; break;
+        case 'X': fs.conversion = ConversionSpecifier::INTEGER_HEXADECIMAL_UPPER; break;
+        case 'f': fs.conversion = ConversionSpecifier::FLOAT_DECIMAL; break;
+        case 'e': fs.conversion = ConversionSpecifier::FLOAT_EXPONENTIAL_LOWER; break;
+        case 'E': fs.conversion = ConversionSpecifier::FLOAT_EXPONENTIAL_UPPER; break;
+        case 'g': fs.conversion = ConversionSpecifier::FLOAT_SHORTEST_LOWER; break;
+        case 'G': fs.conversion = ConversionSpecifier::FLOAT_SHORTEST_UPPER; break;
+        case 'c': fs.conversion = ConversionSpecifier::CHARACTER; break;
+        case 's': fs.conversion = ConversionSpecifier::STRING; break;
+        case 'p': fs.conversion = ConversionSpecifier::POINTER; break;
+        case '%': fs.conversion = ConversionSpecifier::PERCENT_SIGN; break;
+        default: fs.conversion = ConversionSpecifier::NONE; break;
+    }
+    if (fs.conversion != ConversionSpecifier::NONE) {
+        ++current;
+    }
+
+    // Update the input pointer to reflect the consumed characters
+    *format = current;
+
+    return fs;
+}
+
+
 
 // Function to write an integer into a buffer with arbitrary radix
 void integer_to_string(int value, char buffer[100], int radix) {
-    if (radix < 2 || radix > 36) {
+    if( radix < 2 || radix > 36) {
         buffer[0] = '\0'; // Invalid radix
         return;
     }
 
     const char* digits = "0123456789abcdefghijklmnopqrstuvwxyz";
     
-    if (value == 0) {
+    if( value == 0) {
         buffer[0] = '0';
         buffer[1] = '\0';
         return;
@@ -206,7 +349,7 @@ void integer_to_string(int value, char buffer[100], int radix) {
         absValue /= radix;
     }
 
-    if (isNegative) temp[index++] = '-';
+    if( isNegative) temp[index++] = '-';
 
     int bufferIndex = 0;
     for (int i = index - 1; i >= 0; --i) buffer[bufferIndex++] = temp[i];
@@ -216,54 +359,69 @@ void integer_to_string(int value, char buffer[100], int radix) {
 
 
 
-int my_snprintf(char* buffer, size_t n, const char* format, ...) {
-    // Initialize the variable argument list
-    va_list args;
-    va_start(args, format);
-
-    size_t buffer_index = 0; // Tracks the current index in the buffer
+// Core function taking a va_list
+int my_vsnprintf( char* buffer, size_t n, const char* format, va_list args ) 
+{
+    
+    size_t buffer_index = 0; // Tracks the current index in the buffer. Number of characters written 
     const char* current = format;
 
-    while (*current != '\0') {
-        if (*current == '%') {
+    while( *current != '\0' ) 
+    {
+        if( *current == '%') {
+            
             ++current; // Advance past '%'
 
-            if (*current == '%') {
+            if( *current == '%') {
+                
                 // Handle "%%": Output a literal '%'
-                if (buffer_index < n - 1) {
+                if( buffer_index < n - 1) {
                     buffer[buffer_index] = '%';
                 }
+                
                 ++buffer_index;
                 ++current;
+
             } else {
                 // Unsupported specifier (for now, we ignore it)
                 ++current;
             }
+
         } else {
+            
             // Handle normal characters
-            if (buffer_index < n - 1) {
+            if( buffer_index < n - 1) {
                 buffer[buffer_index] = *current;
             }
+    
             ++buffer_index;
             ++current;
         }
     }
 
     // Null-terminate the buffer if space is available
-    if (n > 0) {
+    if( n > 0) {
         buffer[std::min(buffer_index, n - 1)] = '\0';
     }
-
-    va_end(args);
 
     // Return the total number of characters that would have been written
     return static_cast<int>(buffer_index);
 }
 
+// Wrapper function taking variadic arguments
+int my_snprintf(char* buffer, size_t n, const char* format, ...) {
+    va_list args;
+    va_start(args, format);                      // Initialize the variable argument list
+    int result = my_vsnprintf(buffer, n, format, args); // Forward to the core function
+    va_end(args);                                // Clean up
+    return result;
+}
 
 
 
-int my_vsnprintf(char *buffer, size_t n, const char *format, va_list args) {
+
+
+int my_vsnprintf2(char *buffer, size_t n, const char *format, va_list args) {
     size_t i = 0;   // Index for format string
     size_t j = 0;   // Index for output buffer
     char c;
@@ -274,13 +432,13 @@ int my_vsnprintf(char *buffer, size_t n, const char *format, va_list args) {
         assert(c != '%' && "Format specifiers are not supported in this implementation!");
 
         // Write the character to the buffer if there is space
-        if (j + 1 < n) { // Reserve space for the null terminator
+        if( j + 1 < n) { // Reserve space for the null terminator
             buffer[j++] = c;
         }
     }
 
     // Null-terminate the buffer if space is available
-    if (n > 0) {
+    if( n > 0) {
         buffer[j < n ? j : n - 1] = '\0';
     }
 
@@ -291,31 +449,227 @@ int my_vsnprintf(char *buffer, size_t n, const char *format, va_list args) {
 
 
 
+void WriteFormatted ( const char * format1, const char * format2, ... )
+{
+  va_list args;
+  va_list args2;
+  
+  va_start (args, format2);
+  
+  vprintf (format1, args);
+  
+  va_copy( args2, args );
+  
+  vprintf (format2, args );
+  va_end (args);
+  
+  vprintf (format2, args2 );
+  va_end (args2);
+  
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Function to format output based on FormatSpecifier
+int format_with_specifier(char* buffer, size_t n, const FormatSpecifier& fs, va_list args) {
+    int written = 0;
+
+    if (n == 0) {
+        return 0; // No buffer space available
+    }
+
+    // Temporary buffer for formatted output
+    char temp[1024]; // Large enough to hold intermediate data
+    temp[0] = '\0';  // Ensure null-termination
+
+    // Handle different conversion specifiers
+    switch (fs.conversion) {
+        case ConversionSpecifier::INTEGER_SIGNED_DECIMAL: {
+            int value = va_arg(args, int); // Get the next integer argument
+            if (fs.showSign && value >= 0) {
+                snprintf(temp, sizeof(temp), "+%d", value);
+            } else if (fs.spaceBeforePositive && value >= 0) {
+                snprintf(temp, sizeof(temp), " %d", value);
+            } else {
+                snprintf(temp, sizeof(temp), "%d", value);
+            }
+            break;
+        }
+        case ConversionSpecifier::INTEGER_HEXADECIMAL_LOWER: {
+            unsigned int value = va_arg(args, unsigned int);
+            if (fs.alternateForm) {
+                snprintf(temp, sizeof(temp), "0x%x", value);
+            } else {
+                snprintf(temp, sizeof(temp), "%x", value);
+            }
+            break;
+        }
+        case ConversionSpecifier::STRING: {
+            const char* value = va_arg(args, const char*);
+            if (!value) {
+                value = "(null)";
+            }
+            snprintf(temp, sizeof(temp), "%.*s", fs.precision >= 0 ? fs.precision : (int)strlen(value), value);
+            break;
+        }
+        case ConversionSpecifier::CHARACTER: {
+            char value = (char)va_arg(args, int); // Characters are passed as int
+            snprintf(temp, sizeof(temp), "%c", value);
+            break;
+        }
+        case ConversionSpecifier::PERCENT_SIGN: {
+            snprintf(temp, sizeof(temp), "%%");
+            break;
+        }
+        default: {
+            snprintf(temp, sizeof(temp), "[unsupported]");
+            break;
+        }
+    }
+
+    // Handle width and alignment
+    char formatted[1024]; // Final formatted string
+    if (fs.width > 0) {
+        if (fs.leftAlign) {
+            snprintf(formatted, sizeof(formatted), "%-*s", fs.width, temp);
+        } else {
+            snprintf(formatted, sizeof(formatted), "%*s", fs.width, temp);
+        }
+    } else {
+        strncpy(formatted, temp, sizeof(formatted) - 1);
+        formatted[sizeof(formatted) - 1] = '\0';
+    }
+
+    // Write to the buffer
+    strncpy(buffer, formatted, n - 1);
+    buffer[n - 1] = '\0'; // Null-terminate
+    written = strlen(formatted);
+
+    return written;
+}
+
+
+
+
+
+
+
+
+
+
+
 // Main function to test the functionality
 int main() {
     
     {
-        // Testing enums
-        std::cout << "ConversionSpecifier: " << to_string(ConversionSpecifier::INTEGER_SIGNED_DECIMAL) << "\n";
-        std::cout << "FormatFlag: " << to_string(FormatFlag::PLUS) << "\n";
-        std::cout << "SizeModifier: " << to_string(SizeModifier::LONG_LONG) << "\n";
+       WriteFormatted ( "Call with %d variable argument.\n", "Call with %d variable %s.\n", 1, 2, "arguments" );
+    }
+    
+    {
+        char buffer[50];
+        int written;
+    
+        // Test case 1: Normal string without %
+        written = my_snprintf(buffer, sizeof(buffer), "Hello, World!");
+        printf("Buffer: %s\n", buffer);
+        printf("Characters Written: %d\n", written);
+    
+        // Test case 2: Literal %%
+        written = my_snprintf(buffer, sizeof(buffer), "Progress: 50%% complete.");
+        printf("Buffer: %s\n", buffer);
+        printf("Characters Written: %d\n", written);
+    
+        // Test case 3: Truncation
+        written = my_snprintf(buffer, 6, "Hello, World!");
+        printf("Buffer (truncated): %s\n", buffer);
+        printf("Characters Written: %d\n", written);
+    
+    }
 
-            FormatSpecifier fs;
+    {
+        char buffer[50];
+        FormatSpecifier fs;
+    
+        // Test case 1: Integer with sign
+        fs = FormatSpecifier{false, true, false, false, false, 10, -1, SizeSpecifier::NONE, ConversionSpecifier::INTEGER_SIGNED_DECIMAL};
+        va_list args;
+        // va_start(args, fs); // Start with an integer (test value: 42)
+        int written = format_with_specifier(buffer, sizeof(buffer), fs, NULL );
+        // va_end(args);
+        printf("Buffer: %s (Written: %d)\n", buffer, written);
+    
+        // Test case 2: Hexadecimal with alternate form
+        fs = {false, false, false, true, false, 10, -1, SizeSpecifier::NONE, ConversionSpecifier::INTEGER_HEXADECIMAL_LOWER};
+        // va_start(args, fs); // Start with an unsigned integer (test value: 255)
+        written = format_with_specifier(buffer, sizeof(buffer), fs, NULL );
+        // va_end(args);
+        printf("Buffer: %s (Written: %d)\n", buffer, written);
+    
+        // Test case 3: String with precision
+        fs = {false, false, false, false, false, 15, 5, SizeSpecifier::NONE, ConversionSpecifier::STRING};
+        // va_start(args, fs); // Start with a string (test value: "Hello, World!")
+        written = format_with_specifier(buffer, sizeof(buffer), fs, NULL );
+        // va_end(args);
+        printf("Buffer: %s (Written: %d)\n", buffer, written);
+    
+        // Test case 4: Character
+        fs = {false, false, false, false, false, 5, -1, SizeSpecifier::NONE, ConversionSpecifier::CHARACTER};
+        // va_start(args, fs); // Start with a char (test value: 'A')
+        written = format_with_specifier(buffer, sizeof(buffer), fs, NULL );
+        // va_end(args);
+        printf("Buffer: %s (Written: %d)\n", buffer, written);
+    }
+    
+    {
+        // Testing enums
+        std::cout << "FormatFlag: " << to_string(FormatFlag::PLUS) << "\n";
+        std::cout << "SizeSpecifier: " << to_string(SizeSpecifier::LONG_LONG) << "\n";
+        std::cout << "ConversionSpecifier: " << to_string(ConversionSpecifier::INTEGER_SIGNED_DECIMAL) << "\n";
+
+        FormatSpecifier fs;
         fs.leftAlign = true;
         fs.zeroPadding = true;
         fs.width = 10;
         fs.precision = 2;
-        fs.size = SizeModifier::LONG;
+        fs.size = SizeSpecifier::LONG;
         fs.conversion = ConversionSpecifier::INTEGER_UNSIGNED_DECIMAL;
 
         std::cout << "FormatSpecifier: " << to_string(fs) << "\n";
     }
 
-    // Testing parse_decimal_integer
+    
+    {
+        const char* format = "%-+ #015.8lld";
+        va_list args; // Dummy va_list for this example
+    
+        FormatSpecifier fs = readFormatSpecifier(&format, args);
+    
+        std::cout << to_string(fs) << std::endl;
+        
+    }
+
+    // Testing parse_unsigned_decimal_integer
     // Testing integer_to_string
     {
         const char* testInput = "12345abc";
-        std::cout << "Parsed integer: " << parse_decimal_integer(testInput) << "\n";
+        unsigned long int result;
+        parse_unsigned_decimal_integer( testInput, &result );
+        std::cout << "Parsed integer: " << result << "\n";
 
         char buffer[100];
         integer_to_string(12345, buffer, 10);
@@ -345,13 +699,13 @@ int main() {
         int written;
     
         // Test case 1: Normal string without %
-        written = my_vsnprintf(buffer, sizeof(buffer), "Hello, World!", NULL);
+        written = my_vsnprintf2(buffer, sizeof(buffer), "Hello, World!", NULL);
         std::cout << "TEST" << std::endl;
         printf("Buffer: %s\n", buffer);
         printf("Characters Written: %d\n", written);
         
         // Test case 2: Buffer too small
-        written = my_vsnprintf(buffer, 6, "Hello, World!", NULL);
+        written = my_vsnprintf2(buffer, 6, "Hello, World!", NULL);
         printf("Buffer (truncated): %s\n", buffer);
         printf("Characters Written: %d\n", written);
     
